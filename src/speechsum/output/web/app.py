@@ -104,8 +104,20 @@ async def transcribe(
         _safe_log_exception("processing_failed", file=file.filename)
         return JSONResponse({"error": str(e)}, status_code=500)
     finally:
-        if temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+        _cleanup_temp_file(temp_path)
+
+
+def _cleanup_temp_file(path: Path) -> None:
+    import time
+    for attempt in range(3):
+        try:
+            path.unlink(missing_ok=True)
+            return
+        except OSError:
+            if attempt < 2:
+                time.sleep(0.5)
+            else:
+                _safe_log_exception("temp_file_cleanup_failed", path=str(path))
 
 
 def run_server(host: str = "127.0.0.1", port: int = 8080) -> None:
