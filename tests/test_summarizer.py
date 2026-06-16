@@ -7,22 +7,29 @@ import pytest
 from speechsum.exceptions import ModelLoadError, SummaryError
 
 
+@patch("speechsum.summarize.engine.AutoTokenizer")
+@patch("speechsum.summarize.engine.AutoModelForSeq2SeqLM")
 @patch("speechsum.summarize.engine.torch")
-@patch("speechsum.summarize.engine.pipeline")
-def test_summarize_success(mock_pipeline, mock_torch):
+def test_summarize_success(mock_torch, mock_auto_model, mock_auto_tokenizer):
     mock_torch.cuda.is_available.return_value = False
+    mock_torch.no_grad.return_value.__enter__ = MagicMock()
+    mock_torch.no_grad.return_value.__exit__ = MagicMock()
 
-    mock_pipe = MagicMock()
-    mock_pipe.return_value = [{"summary_text": "This is a summary."}]
-    mock_pipeline.return_value = mock_pipe
+    mock_tokenizer = MagicMock()
+    mock_tokenizer.decode.return_value = "summary text"
+    mock_auto_tokenizer.from_pretrained.return_value = mock_tokenizer
+
+    mock_model = MagicMock()
+    mock_model.generate.return_value = [MagicMock()]
+    mock_auto_model.from_pretrained.return_value = mock_model
 
     from speechsum.summarize.engine import Summarizer
 
     summarizer = Summarizer(model_name="fake-model")
-    result = summarizer.summarize("This is a long text that should be summarized into something shorter.")
+    result = summarizer.summarize("This is a long text that should be summarized.")
 
-    assert result == "This is a summary."
-    mock_pipe.assert_called_once()
+    assert result == "summary text"
+    mock_model.generate.assert_called_once()
 
 
 def test_summarize_empty_text():
@@ -43,11 +50,12 @@ def test_summarize_cuda_auto_detect(mock_torch):
     assert summarizer.device == "cuda"
 
 
+@patch("speechsum.summarize.engine.AutoTokenizer")
+@patch("speechsum.summarize.engine.AutoModelForSeq2SeqLM")
 @patch("speechsum.summarize.engine.torch")
-@patch("speechsum.summarize.engine.pipeline")
-def test_model_load_error(mock_pipeline, mock_torch):
+def test_model_load_error(mock_torch, mock_auto_model, _mock_tokenizer):
     mock_torch.cuda.is_available.return_value = False
-    mock_pipeline.side_effect = RuntimeError("Model not found")
+    mock_auto_model.from_pretrained.side_effect = RuntimeError("Model not found")
 
     from speechsum.summarize.engine import Summarizer
 
