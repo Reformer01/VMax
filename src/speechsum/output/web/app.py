@@ -35,7 +35,7 @@ def get_pipeline() -> Pipeline:
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.post("/transcribe")
@@ -47,8 +47,20 @@ async def transcribe(
         return JSONResponse({"error": "No file provided"}, status_code=400)
 
     ext = Path(file.filename).suffix.lower()
-    supported = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aiff",
-                 ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"}
+    supported = {
+        ".wav",
+        ".mp3",
+        ".flac",
+        ".ogg",
+        ".m4a",
+        ".aiff",
+        ".mp4",
+        ".mov",
+        ".avi",
+        ".mkv",
+        ".webm",
+        ".m4v",
+    }
     if ext not in supported:
         return JSONResponse(
             {"error": f"Unsupported format: {ext}"},
@@ -77,5 +89,6 @@ async def transcribe(
 
 def run_server(host: str = "127.0.0.1", port: int = 8080) -> None:
     import uvicorn
+
     logger.info("web_server_starting", host=host, port=port)
     uvicorn.run(app, host=host, port=port, log_level="info")
