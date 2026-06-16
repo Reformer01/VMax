@@ -3,11 +3,23 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from pydub import AudioSegment
 
-from speechsum.audio.utils import validate_audio_path
-from speechsum.config import settings
-from speechsum.exceptions import AudioLoadError
+# Suppress pydub's misleading "Couldn't find ffmpeg" warning before importing it
+import warnings
+warnings.filterwarnings("ignore", message="Couldn't find ffmpeg or avconv")
+
+from pydub import AudioSegment  # noqa: E402
+
+from speechsum.audio.utils import validate_audio_path  # noqa: E402
+from speechsum.config import settings  # noqa: E402
+from speechsum.exceptions import AudioLoadError  # noqa: E402
+
+# Point pydub to the ffmpeg bundled with imageio-ffmpeg
+import importlib  # noqa: E402
+_ffmpeg_spec = importlib.util.find_spec("imageio_ffmpeg")
+if _ffmpeg_spec is not None:
+    import imageio_ffmpeg  # noqa: E402
+    AudioSegment.ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
 
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aiff"}
 
