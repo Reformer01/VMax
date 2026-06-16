@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero-section">
+  <div class="hero-content">
+    <span class="eyebrow-badge">AI-POWERED</span>
+    <h1 class="hero-title">From audio to insight,<br>in seconds.</h1>
+    <p class="hero-subtitle">
+      Upload a lecture, podcast, or video — we transcribe and summarize it for you.
+    </p>
+  </div>
+</section>
+
+<section class="upload-section">
+  <div class="double-bezel-outer">
+    <div class="double-bezel-inner upload-card">
+      <div class="upload-zone" id="uploadZone">
+        <div class="upload-icon">
+          <i class="ph ph-cloud-arrow-up"></i>
+        </div>
+        <h3 class="upload-title">Drop your file here</h3>
+        <p class="upload-hint">or click to browse — MP3, WAV, FLAC, MP4, MOV</p>
+        <input type="file" id="fileInput" accept=".wav,.mp3,.flac,.ogg,.m4a,.mp4,.mov,.avi,.mkv" hidden>
+        <button class="btn-primary" id="selectBtn">
+          <span>Choose File</span>
+          <span class="btn-icon-wrap"><i class="ph ph-arrow-up-right"></i></span>
+        </button>
+        <div class="file-info hidden" id="fileInfo">
+          <span id="fileName"></span>
+          <span id="fileSize"></span>
+        </div>
+      </div>
+
+      <div class="upload-options">
+        <label class="toggle-label">
+          <input type="checkbox" id="summarizeToggle" checked>
+          <span class="toggle-track">
+            <span class="toggle-thumb"></span>
+          </span>
+          <span class="toggle-text">Generate summary</span>
+        </label>
+        <button class="btn-secondary hidden" id="processBtn">
+          <span>Process</span>
+          <span class="btn-icon-wrap"><i class="ph ph-play"></i></span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="results-section hidden" id="resultsSection">
+  <div class="double-bezel-outer">
+    <div class="double-bezel-inner result-card">
+      <div class="result-header">
+        <h2 class="result-title">Transcription</h2>
+        <span class="result-meta" id="resultMeta"></span>
+      </div>
+      <div class="result-body" id="transcriptionBody">
+        <div class="loading-spinner hidden" id="transcriptionSpinner">
+          <div class="spinner"></div>
+          <span>Transcribing...</span>
+        </div>
+        <p class="result-text" id="transcriptionText"></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="double-bezel-outer summary-outer hidden" id="summaryOuter">
+    <div class="double-bezel-inner result-card summary-card">
+      <div class="result-header">
+        <h2 class="result-title">Summary</h2>
+      </div>
+      <div class="result-body">
+        <div class="loading-spinner hidden" id="summarySpinner">
+          <div class="spinner"></div>
+          <span>Summarizing...</span>
+        </div>
+        <p class="result-text" id="summaryText"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="error-section hidden" id="errorSection">
+  <div class="double-bezel-outer">
+    <div class="double-bezel-inner error-card">
+      <i class="ph ph-warning-circle"></i>
+      <p id="errorText"></p>
+    </div>
+  </div>
+</section>
+{% endblock %}

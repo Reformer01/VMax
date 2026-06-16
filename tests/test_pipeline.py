@@ -9,9 +9,9 @@ import pytest
 from speechsum.exceptions import AudioLoadError
 
 
-@patch("speechsum.pipeline.Transcriber")
 @patch("speechsum.pipeline.Summarizer")
-def test_pipeline_file_not_found(mock_summarizer_cls, mock_transcriber_cls):
+@patch("speechsum.pipeline.Transcriber")
+def test_pipeline_file_not_found(mock_transcriber_cls, _mock_summarizer_cls):
     mock_transcriber_cls.return_value = MagicMock()
     from speechsum.pipeline import Pipeline
 
@@ -20,9 +20,9 @@ def test_pipeline_file_not_found(mock_summarizer_cls, mock_transcriber_cls):
         pipeline.run("/nonexistent/file.mp3")
 
 
-@patch("speechsum.pipeline.Transcriber")
 @patch("speechsum.pipeline.Summarizer")
-def test_pipeline_unsupported_format(mock_summarizer_cls, mock_transcriber_cls):
+@patch("speechsum.pipeline.Transcriber")
+def test_pipeline_unsupported_format(mock_transcriber_cls, _mock_summarizer_cls):
     mock_transcriber_cls.return_value = MagicMock()
     from speechsum.pipeline import Pipeline
 
