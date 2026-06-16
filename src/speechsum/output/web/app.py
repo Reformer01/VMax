@@ -8,6 +8,7 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from speechsum.pipeline import Pipeline
 
@@ -18,6 +19,19 @@ TEMPLATES_DIR = HERE / "templates"
 STATIC_DIR = HERE / "static"
 
 app = FastAPI(title="speechsum", version="0.1.0")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.exception("unhandled_error", path=request.url.path)
+    return JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(_request: Request, exc: StarletteHTTPException):
+    return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
+
+
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 if STATIC_DIR.exists():

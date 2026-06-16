@@ -90,7 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     try {
       const res = await fetch('/transcribe', { method: 'POST', body: formData });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        const text = await res.text();
+        throw new Error(text || 'Processing failed');
+      }
 
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Processing failed');
