@@ -9,6 +9,7 @@ from speechsum.audio.extractor import VIDEO_EXTENSIONS, extract_audio
 from speechsum.audio.loader import AUDIO_EXTENSIONS, load_audio
 from speechsum.audio.recorder import record_audio
 from speechsum.config import settings
+from speechsum.punctuation.restorer import restore_punctuation
 from speechsum.stt.engine import Transcriber
 from speechsum.summarize.engine import Summarizer
 
@@ -68,6 +69,11 @@ class Pipeline:
         text, words = self.transcriber.transcribe_with_timestamps(samples)
         logger.info("transcription_complete", length=len(text), words=len(words))
 
+        # Restore punctuation and capitalization
+        logger.info("restoring_punctuation")
+        text = restore_punctuation(text)
+        logger.info("punctuation_restored", length=len(text))
+
         summary: str | None = None
         if summarize:
             logger.info("summarizing", text_length=len(text))
@@ -100,6 +106,11 @@ class Pipeline:
         logger.info("transcribing_recording")
         text, words = self.transcriber.transcribe_with_timestamps(samples)
         logger.info("transcription_complete", length=len(text))
+
+        # Restore punctuation and capitalization
+        logger.info("restoring_punctuation")
+        text = restore_punctuation(text)
+        logger.info("punctuation_restored", length=len(text))
 
         summary: str | None = None
         if summarize:
