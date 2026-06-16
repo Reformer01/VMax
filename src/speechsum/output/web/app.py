@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from pathlib import Path
 
@@ -18,14 +19,12 @@ HERE = Path(__file__).resolve().parent
 TEMPLATES_DIR = HERE / "templates"
 STATIC_DIR = HERE / "static"
 
-app = FastAPI(title="speechsum", version="0.1.0")
+app = FastAPI(title="VMax", version="0.1.0")
 
 
 def _safe_log_exception(event: str, **kwargs):
-    try:
+    with contextlib.suppress(Exception):
         logger.exception(event, **kwargs)
-    except Exception:
-        pass
 
 
 @app.exception_handler(Exception)
@@ -109,6 +108,7 @@ async def transcribe(
 
 def _cleanup_temp_file(path: Path) -> None:
     import time
+
     for attempt in range(3):
         try:
             path.unlink(missing_ok=True)
