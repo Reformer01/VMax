@@ -1,182 +1,216 @@
 from __future__ import annotations
 
 import re
+from functools import partial
+
 import structlog
 
 logger = structlog.get_logger()
 
-# Try to load the ML model lazily; if it fails, fall back to heuristic
-_ml_pipeline = None
-_ml_model_failed = False
-
-
-def _get_ml_pipeline():
-    global _ml_pipeline, _ml_model_failed
-    if _ml_model_failed:
-        return None
-    if _ml_pipeline is None:
-        try:
-            from transformers import pipeline
-            logger.info("punctuation_model_loading", model="felflare/bert-restore-punctuation")
-            _ml_pipeline = pipeline(
-                "token-classification",
-                model="felflare/bert-restore-punctuation",
-                aggregation_strategy="simple",
-            )
-            logger.info("punctuation_model_loaded")
-        except Exception as e:
-            logger.warning("punctuation_model_load_failed", error=str(e))
-            _ml_model_failed = True
-            return None
-    return _ml_pipeline
-
 
 def restore_punctuation(text: str) -> str:
-    """Restore punctuation and capitalization to raw transcript text."""
     if not text or not text.strip():
         return text
-
-    # Try ML model first
-    pipe = _get_ml_pipeline()
-    if pipe is not None:
-        try:
-            return _restore_with_ml(text, pipe)
-        except Exception as e:
-            logger.warning("ml_punctuation_failed", error=str(e))
-
-    # Fallback: heuristic punctuation
-    return _restore_heuristic(text)
-
-
-def _restore_with_ml(text: str, pipe) -> str:
-    entities = pipe(text)
-    result = []
-    last_end = 0
-    punct_map = {
-        "PERIOD": ".",
-        "COMMA": ",",
-        "QUESTION": "?",
-        "EXCLAMATION": "!",
-        "COLON": ":",
-        "SEMICOLON": ";",
-    }
-
-    for ent in entities:
-        if ent["start"] > last_end:
-            result.append(text[last_end : ent["start"]])
-        word = ent["word"]
-        punct = punct_map.get(ent["entity_group"], "")
-        result.append(word + punct)
-        last_end = ent["end"]
-
-    if last_end < len(text):
-        result.append(text[last_end:])
-
-    return "".join(result)
+    try:
+        return _restore_heuristic(text)
+    except Exception:
+        return text
 
 
 def _restore_heuristic(text: str) -> str:
-    """Heuristic: split on pause words, capitalize, add periods."""
-    # Normalize whitespace
     text = re.sub(r"\s+", " ", text.strip())
 
-    # Protect verb phrases that contain discourse markers
-    # e.g., "let you know" -> "LET_YOU_KNOW" temporarily
-    protections = {
-        r"\blet you know\b": "LET_YOU_KNOW",
-        r"\btell you know\b": "TELL_YOU_KNOW",
-        r"\blet me know\b": "LET_ME_KNOW",
-        r"\blet us know\b": "LET_US_KNOW",
-    }
-    for pattern, token in protections.items():
-        text = re.sub(pattern, token, text, flags=re.IGNORECASE)
+    # --- Protect phrases that should stay together ---
+    protections = [
+        (r"\blet you know\b", "PROTECT_LYK"),
+        (r"\blet me know\b", "PROTECT_LMK"),
+        (r"\blet us know\b", "PROTECT_LUK"),
+    ]
+    for p, t in protections:
+        text = re.sub(p, t, text, flags=re.IGNORECASE)
 
-    # Common discourse markers that start new sentences
-    # Note: we only split when these appear at clause boundaries, not mid-phrase
+    # --- Split on discourse markers that start new sentences ---
+    # Only split when the marker follows a word (not at start of text)
     starters = [
-        "i think", "i believe", "i feel", "i know", "i guess",
-        "you know", "you see", "look", "listen", "well", "so", "anyway",
-        "basically", "actually", "essentially", "literally", "obviously",
-        "clearly", "certainly", "definitely", "probably", "maybe",
-        "however", "therefore", "consequently", "furthermore", "moreover",
-        "nevertheless", "meanwhile", "afterwards", "subsequently",
-        "finally", "eventually", "first", "second", "third", "lastly",
-        "in conclusion", "to summarize", "for example", "in fact",
-        "on the other hand", "in addition", "what about", "by the way",
+        r" " + w + r"\b"
+        for w in [
+            "well",
+            "so",
+            "now",
+            "anyway",
+            "alright",
+            "okay",
+            "basically",
+            "actually",
+            "essentially",
+            "honestly",
+            "frankly",
+            "obviously",
+            "clearly",
+            "certainly",
+            "definitely",
+            "probably",
+            "however",
+            "therefore",
+            "consequently",
+            "furthermore",
+            "moreover",
+            "nevertheless",
+            "meanwhile",
+            "afterwards",
+            "subsequently",
+            "finally",
+            "eventually",
+            "lastly",
+            "in conclusion",
+            "to summarize",
+            "for example",
+            "for instance",
+            "in fact",
+            "in addition",
+            "on the other hand",
+            "you know",
+            "you see",
+            "listen",
+            "by the way",
+            "incidentally",
+        ]
     ]
 
-    # Question phrases that typically end a sentence (longer, specific ones)
-    question_phrases = [
-        "what do you think about",
-        "how do you feel about",
-        "what are your thoughts on",
-        "what is your opinion on",
-        "can you tell me",
-        "could you explain",
-        "would you mind",
-        "do you know",
-        "did you know",
-        "have you heard",
-        "have you seen",
-        "what do you think",
-        "what do you mean",
-        "why not",
+    for s in starters:
+        text = re.sub(s, lambda m: ". " + m.group(0).strip(), text, flags=re.IGNORECASE)
+
+    # Split on "i think/believe/feel/know/mean/guess" when mid-sentence
+    i_phrases = r" (i think|i believe|i feel|i know|i mean|i guess|i suppose) "
+    text = re.sub(i_phrases, lambda m: ". " + m.group(1).strip() + " ", text, flags=re.IGNORECASE)
+
+    # --- Split on "and/but/or/so" + article/pronoun (independent clause) ---
+    connectors = [
+        (
+            r"\band\s+(the|a|an|this|that|these|those|it|they|he|she|we|i|you|there|here|one|some|many|all|every|no|any|what|which|who)",
+            ". And ",
+        ),
+        (
+            r"\bbut\s+(the|a|an|this|that|these|those|it|they|he|she|we|i|you|there|here|one|some|many|all|every)",
+            ". But ",
+        ),
+        (
+            r"\bor\s+(the|a|an|this|that|these|those|it|they|he|she|we|i|you|there|here|one|some|many|all)",
+            ". Or ",
+        ),
+        (r"\bso\s+(the|a|an|this|that|these|those|it|they|he|she|we|i|you|there|here)", ". So "),
     ]
 
-    # Sort by length descending to match longest first
-    starters.sort(key=len, reverse=True)
+    def _prepend_replacement(r: str, m: re.Match[str]) -> str:
+        return r + m.group(1)
 
-    for s in starters:
-        # Match word boundary + starter at start of sentence or after space
-        pattern = r"(?<=\s)" + re.escape(s) + r"\b"
-        text = re.sub(pattern, r". " + s, text, flags=re.IGNORECASE)
+    for pattern, replacement in connectors:
+        text = re.sub(
+            pattern, partial(_prepend_replacement, replacement), text, flags=re.IGNORECASE
+        )
 
-    # Also handle sentence-initial starters
-    for s in starters:
-        pattern = r"^" + re.escape(s) + r"\b"
-        text = re.sub(pattern, s.capitalize(), text, flags=re.IGNORECASE)
+    # --- Split on "then" as a temporal connector ---
+    text = re.sub(
+        r" then (the|a|an|this|that|these|those|it|they|he|she|we|i|you|there|we)\b",
+        lambda m: ". Then " + m.group(1),
+        text,
+        flags=re.IGNORECASE,
+    )
 
-    # Question phrases: add question mark before them
-    question_phrases.sort(key=len, reverse=True)
-    for q in question_phrases:
-        pattern = r"(?<=\s)" + re.escape(q) + r"\b"
-        text = re.sub(pattern, r"? " + q, text, flags=re.IGNORECASE)
+    # --- Split after temporal references when followed by pronoun ---
+    text = re.sub(
+        r" (today|yesterday|tomorrow|now|soon|immediately|at first|at last|after that) (i|you|he|she|it|we|they|this|that|these|those|there)\b",
+        lambda m: ". " + m.group(1).capitalize() + " " + m.group(2),
+        text,
+        flags=re.IGNORECASE,
+    )
 
-    for q in question_phrases:
-        pattern = r"^" + re.escape(q) + r"\b"
-        text = re.sub(pattern, q.capitalize(), text, flags=re.IGNORECASE)
+    # --- Split on appositive "this/that" after a noun ---
+    text = re.sub(
+        r"([a-z]+) (this|that|these|those) (is|are|was|were|has|have|had|will|would|refers|means|shows)",
+        lambda m: m.group(1) + ". " + m.group(2).capitalize() + " " + m.group(3),
+        text,
+        flags=re.IGNORECASE,
+    )
 
-    # Split on long comma sequences (indicates pause)
-    text = re.sub(r"\s*,\s*,\s*", ". ", text)
-    text = re.sub(r"\s+and\s+and\s+", ". ", text)
+    # Split on "in other words", "that is to say", "what this means"
+    text = re.sub(
+        r" (in other words|that is to say)\b",
+        lambda m: ". " + m.group(1).capitalize(),
+        text,
+        flags=re.IGNORECASE,
+    )
 
-    # Capitalize first letter
-    text = text.strip()
-    if text:
-        text = text[0].upper() + text[1:]
+    # --- Comma after introductory word at sentence start ---
+    text = re.sub(
+        r"(?:^|\.)\s*(well|so|now|yes|no|sure|okay|alright|right|first(?:ly)?|second(?:ly)?|third(?:ly)?|finally|lastly)\s+([A-Za-z])",
+        lambda m: m.group(0).split(m.group(1))[0] + m.group(1) + ", " + m.group(2),
+        text,
+        flags=re.IGNORECASE,
+    )
 
-    # Capitalize after sentence endings
-    text = re.sub(r"([.!?])\s+([a-z])", lambda m: m.group(1) + " " + m.group(2).upper(), text)
+    # --- Capitalization ---
+    # Capitalize "i" to "I"
+    text = re.sub(r"\bi\b", "I", text)
+
+    # Capitalize first word of text and after sentence-ending punctuation
+    pieces = re.split(r"([.!?])\s*", text)
+    result_parts = []
+    for i, piece in enumerate(pieces):
+        if i == 0:
+            # First piece - capitalize first letter
+            result_parts.append(piece[0].upper() + piece[1:] if piece else "")
+        elif piece in ".!?":
+            result_parts.append(piece)
+        elif piece:
+            result_parts.append(piece[0].upper() + piece[1:])
+        else:
+            result_parts.append("")
+    text = "".join(result_parts)
+
+    # --- Question detection: check each sentence ---
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    question_words = r"\b(what|who|where|when|why|how|which|whose|whom)\b"
+    for i, sent in enumerate(sentences):
+        if (
+            sent
+            and not sent.rstrip().endswith("?")
+            and re.search(question_words, sent, re.IGNORECASE)
+            and re.search(
+                r"\b(do|does|did|is|are|was|were|can|could|will|would|shall|should|may|might|have|has|had)\s",
+                sent,
+                re.IGNORECASE,
+            )
+        ):
+            sentences[i] = sent.rstrip() + "?"
+    text = " ".join(sentences)
+
+    # --- Cleanup ---
+    text = re.sub(r"\s+([.,!?:;])", r"\1", text)
+    text = re.sub(r"([.,!?:;])([a-zA-Z])", r"\1 \2", text)
+    text = re.sub(r"\.{2,}", ".", text)
+    text = re.sub(r"\?\.", "?", text)
+    text = re.sub(r",{2,}", ",", text)
+    text = re.sub(r"\?{2,}", "?", text)
+    text = re.sub(r"\s{2,}", " ", text)
 
     # Ensure ends with period
+    text = text.strip()
     if text and text[-1] not in ".!?":
         text += "."
 
-    # Fix spacing around punctuation
-    text = re.sub(r"\s+([.,!?])", r"\1", text)
-    text = re.sub(r"([.,!?])([A-Za-z])", r"\1 \2", text)
-
-    # Fix double spaces
-    text = re.sub(r"\s{2,}", " ", text)
+    # Fix contractions after capitalization
+    contractions = {r"\bIm\b": "I'm", r"\bIll\b": "I'll", r"\bIve\b": "I've", r"\bId\b": "I'd"}
+    for p, r in contractions.items():
+        text = re.sub(p, r, text)
 
     # Restore protected phrases
     restorations = {
-        "LET_YOU_KNOW": "let you know",
-        "TELL_YOU_KNOW": "tell you know",
-        "LET_ME_KNOW": "let me know",
-        "LET_US_KNOW": "let us know",
+        "PROTECT_LYK": "let you know",
+        "PROTECT_LMK": "let me know",
+        "PROTECT_LUK": "let us know",
     }
-    for token, phrase in restorations.items():
-        text = text.replace(token, phrase)
+    for t, p in restorations.items():
+        text = text.replace(t, p)
 
     return text

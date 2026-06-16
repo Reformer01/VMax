@@ -53,7 +53,7 @@ def test_pipeline_run(mock_load_audio, mock_summarizer_cls, mock_transcriber_cls
     pipeline = Pipeline()
     result = pipeline.run(some_wav := str(Path.cwd() / "test.wav"))
 
-    assert result.transcription == "hello world"
+    assert result.transcription == "Hello world."
     assert result.summary == "summary text"
     assert result.source == some_wav
     assert len(result.words) == 1
@@ -81,6 +81,6 @@ def test_pipeline_run_from_recording(mock_record, mock_summarizer_cls, mock_tran
     pipeline = Pipeline()
     result = pipeline.run_from_recording(duration=5)
 
-    assert result.transcription == "recorded speech"
+    assert result.transcription == "Recorded speech."
     assert result.summary == "recorded summary"
     assert result.source == "microphone"
