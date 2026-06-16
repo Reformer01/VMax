@@ -43,5 +43,7 @@ jobs:
         run: |
           speechsum --help
           speechsum transcribe --help
-          speechsum summarize --help
+          speechsum record --help
+          speechsum download --help
+          speechsum models --help
           speechsum config show
