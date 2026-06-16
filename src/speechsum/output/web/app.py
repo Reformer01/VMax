@@ -21,9 +21,16 @@ STATIC_DIR = HERE / "static"
 app = FastAPI(title="speechsum", version="0.1.0")
 
 
+def _safe_log_exception(event: str, **kwargs):
+    try:
+        logger.exception(event, **kwargs)
+    except Exception:
+        pass
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.exception("unhandled_error", path=request.url.path)
+    _safe_log_exception("unhandled_error", path=request.url.path)
     return JSONResponse({"error": str(exc)}, status_code=500)
 
 
@@ -94,7 +101,7 @@ async def transcribe(
         result = pipeline.run(source=temp_path, summarize=summarize)
         return JSONResponse(result.to_dict())
     except Exception as e:
-        logger.exception("processing_failed", file=file.filename)
+        _safe_log_exception("processing_failed", file=file.filename)
         return JSONResponse({"error": str(e)}, status_code=500)
     finally:
         if temp_path.exists():
