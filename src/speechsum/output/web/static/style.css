@@ -175,14 +175,19 @@ body::before {
   background: rgba(168, 85, 247, 0.04);
 }
 
-.upload-icon {
-  font-size: 2.5rem;
-  color: var(--text-secondary);
-  margin-bottom: 1rem;
+.icon-lg {
+  width: 2.5rem;
+  height: 2.5rem;
 }
 
-.upload-icon i {
-  font-size: 2.5rem;
+.icon-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.upload-icon {
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
 }
 
 .upload-title {
@@ -382,8 +387,10 @@ body::before {
   color: #ef4444;
 }
 
-.error-card i {
-  font-size: 1.5rem;
+.error-card .icon-lg {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
 }
 
 .toast {
